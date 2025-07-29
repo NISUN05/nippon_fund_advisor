@@ -1,17 +1,32 @@
-# Nippon Fund Advisor 📈
+# Nippon Fund Advisor
 
-A Streamlit app to help investors analyze Nippon India Mutual Funds using interactive charts and key financial metrics. It showcases mutual fund analysis and portfolio recommendations.
+**Nippon Fund Advisor** is a Streamlit-based interactive web application that provides mutual fund suggestions tailored to your investment profile.
 
-## Features
+It uses **live data from AMFI India** and considers:
+- Investment horizon
+- Risk appetite
+- Financial goals
 
-- Select and analyze Nippon mutual funds
-- View NAV charts
-- Analyze rolling returns, drawdowns, and comparisons
-- Easy-to-use interactive interface
-- Displays key mutual fund performance metrics
-- Interactive charts and visualizations
-- Fund comparison and recommendation based on user input
-- Easy-to-use Streamlit interface
+You can also browse and explore all Nippon India mutual fund schemes and view key metrics.
+
+---
+
+## 🚀 Features
+
+- Personalized fund recommendation
+- Live mutual fund NAV from [AMFI](https://www.amfiindia.com/)
+- Risk/return classification tags
+- Search & explore all Nippon mutual funds
+- Styled UI with high-contrast readability
+
+---
+
+## ⚠️ Disclaimer
+
+This project is built for **educational and demonstration purposes only**.  
+It is **not intended to provide financial advice or investment recommendations**.  
+Always consult a **SEBI-registered financial advisor** or qualified professional before making any investment decisions.
+
 
 
 ## Run Locally
