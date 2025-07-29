@@ -116,6 +116,7 @@ if best_schemes:
 
     if nav_stats:
         stat_df = pd.DataFrame(nav_stats)
+        stat_df.index = [f"#{i+1}" for i in range(len(stat_df))]
         st.dataframe(stat_df, use_container_width=True)
 
 # --- Prepare Data for Top Scheme ---
@@ -125,7 +126,7 @@ scheme_data = scheme_data.sort_values('Date')
 
 # --- Key Stats ---
 if best_scheme and not scheme_data.empty:
-    st.subheader("NO.1 FUND SUMMARY")
+    st.subheader("FUND SUMMARY")
     avg_nav = round(scheme_data['Net Asset Value'].mean(), 2)
     max_nav = round(scheme_data['Net Asset Value'].max(), 2)
     min_nav = round(scheme_data['Net Asset Value'].min(), 2)
@@ -160,3 +161,4 @@ if not selected_data.empty:
     st.markdown(f"<div style='font-size:16px;'>Latest NAV: ₹{selected_data['Net Asset Value'].iloc[-1]:.2f}</div>", unsafe_allow_html=True)
 else:
     st.warning("No data available for selected scheme.")
+
