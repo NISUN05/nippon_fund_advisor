@@ -125,3 +125,4 @@ if not selected_data.empty:
     st.markdown(f"<div style='font-size:16px;'>Latest NAV: ₹{selected_data['Net Asset Value'].iloc[-1]:.2f}</div>", unsafe_allow_html=True)
 else:
     st.warning("No data available for selected scheme.")
+
