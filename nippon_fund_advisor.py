@@ -1,116 +1,124 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.graph_objs as go
+import matplotlib.pyplot as plt
+import plotly.express as px
+import requests
+from io import StringIO
 
-# ------------------ FUND DATABASE ------------------
-funds = [
-    {
-        "name": "Nippon India Small Cap Fund",
-        "category": "Small Cap",
-        "risk": "High",
-        "goal": ["Wealth Creation"],
-        "description": "Focuses on small-cap stocks with high growth potential. Suitable for aggressive investors with long-term horizon.",
-        "cagr_5y": 27.3
-    },
-    {
-        "name": "Nippon India Large Cap Fund",
-        "category": "Large Cap",
-        "risk": "Medium",
-        "goal": ["Wealth Creation", "Retirement"],
-        "description": "Invests in large, stable companies. Balanced growth and lower volatility.",
-        "cagr_5y": 14.2
-    },
-    {
-        "name": "Nippon India ELSS Tax Saver",
-        "category": "ELSS",
-        "risk": "Medium",
-        "goal": ["Tax Saving", "Wealth Creation"],
-        "description": "Save tax under 80C and grow wealth with a 3-year lock-in.",
-        "cagr_5y": 17.5
-    },
-    {
-        "name": "Nippon India Balanced Advantage Fund",
-        "category": "Dynamic Asset Allocation",
-        "risk": "Medium",
-        "goal": ["Retirement", "Child Education", "Wealth Creation"],
-        "description": "Auto-balances equity and debt based on market conditions. Great for medium risk investors.",
-        "cagr_5y": 11.8
-    },
-    {
-        "name": "Nippon India Liquid Fund",
-        "category": "Liquid",
-        "risk": "Low",
-        "goal": ["Short-Term Saving"],
-        "description": "Ultra-short duration fund with low risk. Better than a savings account for idle money.",
-        "cagr_5y": 5.3
-    },
-    {
-        "name": "Nippon India Multi Cap Fund",
-        "category": "Multi Cap",
-        "risk": "High",
-        "goal": ["Wealth Creation"],
-        "description": "Diversified across large, mid, and small caps. Ideal for long-term growth.",
-        "cagr_5y": 18.7
-    },
-]
+st.set_page_config(
+    page_title="NIPPON FUND ADVISOR",
+    page_icon="📈",
+    layout="wide"
+)
 
-# ------------------ FUND RECOMMENDER ------------------
-def recommend_funds(goal, risk):
-    results = []
-    for fund in funds:
-        if goal in fund["goal"] and (
-            risk == fund["risk"] or (risk == "High" and fund["risk"] in ["Medium", "High"])
-        ):
-            results.append(fund)
-    return results
+# --- Homepage Banner ---
+st.title("Nippon Fund Advisor")
+st.markdown("""
+Welcome to **Nippon Fund Advisor** – your personalized guide to the best Nippon India mutual funds, tailored to your investment goals.
+Live NAV data from [AMFI India](https://www.amfiindia.com/).
+""")
 
-# ------------------ CAGR PROJECTION ------------------
-def project_returns(amount, cagr, years):
-    return round(amount * ((1 + cagr / 100) ** years), 2)
+# --- Fetch Real NAV Data from AMFI ---
+@st.cache_data(ttl=86400)
+def load_amfi_nav():
+    url = "https://www.amfiindia.com/spages/NAVAll.txt"
+    response = requests.get(url)
+    if response.status_code != 200:
+        st.error("Failed to fetch NAV data from AMFI.")
+        return pd.DataFrame()
 
-# ------------------ STREAMLIT UI ------------------
-st.set_page_config(page_title="Nippon India Fund Advisor", layout="centered")
-st.title(" Nippon India Mutual Fund Advisor")
-st.caption("Personalized recommendations based on your investment profile")
+    raw_lines = response.text.splitlines()
+    start_idx = None
+    for i, line in enumerate(raw_lines):
+        if line.strip().startswith("Scheme Code;"):
+            start_idx = i
+            break
 
-# 🧾 Input Section
-col1, col2 = st.columns(2)
-with col1:
-    age = st.slider("Your Age", 18, 70, 30)
-    salary = st.number_input("Monthly Salary (INR)", min_value=5000, step=1000)
-    goal = st.selectbox("Your Investment Goal", ["Wealth Creation", "Retirement", "Tax Saving", "Child Education", "Short-Term Saving"])
-with col2:
-    expenses = st.number_input("Monthly Expenses (INR)", min_value=1000, step=500)
-    risk = st.radio("Your Risk Tolerance", ["Low", "Medium", "High"])
-    horizon = st.slider("Investment Horizon (Years)", 1, 30, 5)
+    if start_idx is None:
+        st.error("Unable to parse AMFI data format.")
+        return pd.DataFrame()
 
-invest_amount = st.number_input("How much do you want to invest monthly? (INR)", min_value=500, step=100)
+    csv_data = "\n".join(raw_lines[start_idx:])
+    df = pd.read_csv(StringIO(csv_data), sep=';')
+    df.columns = df.columns.str.strip()
+    df = df.dropna(subset=['Scheme Name'])
+    df['Net Asset Value'] = pd.to_numeric(df['Net Asset Value'].astype(str).str.replace(',', ''), errors='coerce')
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    return df.dropna(subset=['Date'])
 
-if st.button("📈 Show My Fund Recommendations"):
-    recs = recommend_funds(goal, risk)
+nav_df = load_amfi_nav()
+nippon_df = nav_df[nav_df['Scheme Name'].str.contains("Nippon", case=False, na=False)]
+scheme_names = sorted(nippon_df['Scheme Name'].unique())
 
-    if not recs:
-        st.warning("No matching funds found for your profile.")
-    else:
-        st.success(f"Here are {len(recs)} suitable funds for you:")
-        for fund in recs:
-            st.markdown(f"""
-            ### {fund['name']}
-            *Category:* {fund['category']}  
-            *Risk Level:* {fund['risk']}  
-            *CAGR (5Y):* {fund['cagr_5y']}%  
-            **{fund['description']}**
-            """)
-            projected = project_returns(invest_amount * 12, fund["cagr_5y"], horizon)
-            st.markdown(f"📊 **Projected Value (₹{invest_amount * 12}/yr for {horizon} yrs): ₹{projected:,}**")
-            st.markdown("---")
+# --- Sidebar: Collect User Preferences ---
+with st.sidebar:
+    st.header("Investor Profile")
+    with st.form("profile_form"):
+        investment_horizon = st.selectbox("What is your investment horizon?", ["Short Term (1-2 years)", "Medium Term (3-5 years)", "Long Term (5+ years)"])
+        risk_tolerance = st.selectbox("What is your risk appetite?", ["Low", "Medium", "High"])
+        goal_type = st.selectbox("Your investment goal?", ["Wealth Growth", "Regular Income", "Capital Preservation"])
+        submitted = st.form_submit_button("Update Recommendation")
 
-        # Bar chart comparison
-        chart_data = pd.DataFrame({
-            "Fund": [f["name"] for f in recs],
-            "Projected Value": [project_returns(invest_amount * 12, f["cagr_5y"], horizon) for f in recs]
-        })
-        fig = go.Figure([go.Bar(x=chart_data["Fund"], y=chart_data["Projected Value"], marker_color='crimson')])
-        fig.update_layout(title="📊 Projected Returns Comparison", yaxis_title="₹ Value")
-        st.plotly_chart(fig, use_container_width=True)
+# --- Fund Recommendation Logic ---
+def recommend_fund(df, horizon, risk, goal):
+    rating_map = {
+        ("Long Term (5+ years)", "High", "Wealth Growth"): "Nippon India Small Cap Fund - Growth",
+        ("Medium Term (3-5 years)", "Medium", "Capital Preservation"): "Nippon India Large Cap Fund - Growth",
+        ("Short Term (1-2 years)", "Low", "Regular Income"): "Nippon India Low Duration Fund - Growth",
+    }
+    for key, scheme in rating_map.items():
+        if key == (horizon, risk, goal) and scheme in df['Scheme Name'].values:
+            return scheme
+    return scheme_names[0]
+
+if submitted:
+    best_scheme = recommend_fund(nippon_df, investment_horizon, risk_tolerance, goal_type)
+    st.session_state["best_scheme"] = best_scheme
+
+best_scheme = st.session_state.get("best_scheme", recommend_fund(nippon_df, investment_horizon, risk_tolerance, goal_type))
+
+# --- Display Recommended Scheme ---
+st.header("Best Match for You")
+st.success(f"Based on your profile, we recommend: **{best_scheme}**")
+
+# --- Prepare Data for Selected Scheme ---
+scheme_data = nippon_df[nippon_df['Scheme Name'] == best_scheme].copy()
+scheme_data = scheme_data.sort_values('Date')
+
+# --- Key Stats ---
+if not scheme_data.empty:
+    st.subheader("FUND SUMMARY")
+    avg_nav = round(scheme_data['Net Asset Value'].mean(), 2)
+    max_nav = round(scheme_data['Net Asset Value'].max(), 2)
+    min_nav = round(scheme_data['Net Asset Value'].min(), 2)
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Average NAV", f"₹{avg_nav}")
+    col2.metric("Highest NAV", f"₹{max_nav}")
+    col3.metric("Lowest NAV", f"₹{min_nav}")
+
+    st.subheader("ADVISOR INSIGHT")
+    st.info("This fund aligns with your risk profile. Consider SIPs for disciplined investing.")
+else:
+    st.warning("No NAV data available for this scheme.")
+
+# --- Show All Nippon Fund Schemes with Search + Tags ---
+st.header("📚 Browse & Explore Funds")
+search_text = st.text_input("Search by scheme name:", "")
+filtered_df = nippon_df[nippon_df['Scheme Name'].str.contains(search_text, case=False, na=False)]
+
+selected_scheme_browse = st.selectbox("Choose a scheme to view details:", sorted(filtered_df['Scheme Name'].unique()))
+selected_data = filtered_df[filtered_df['Scheme Name'] == selected_scheme_browse].sort_values('Date')
+
+if not selected_data.empty:
+    st.subheader(f"Fund Details: {selected_scheme_browse}")
+    tag = "High Risk / High Return" if "Small Cap" in selected_scheme_browse else ("Moderate Risk" if "Large Cap" in selected_scheme_browse else "Low Risk")
+    tag_style = {
+        "High Risk / High Return": "color: #E63946; font-weight: bold; font-family: 'Georgia', serif; font-size: 18px;",
+        "Moderate Risk": "color: #F4A261; font-weight: bold; font-family: 'Georgia', serif; font-size: 18px;",
+        "Low Risk": "color: #2A9D8F; font-weight: bold; font-family: 'Georgia', serif; font-size: 18px;"
+    }
+    st.markdown(f"<div style='{tag_style[tag]}'>Risk Profile: {tag}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:16px;'>Latest NAV: ₹{selected_data['Net Asset Value'].iloc[-1]:.2f}</div>", unsafe_allow_html=True)
+else:
+    st.warning("No data available for selected scheme.")
