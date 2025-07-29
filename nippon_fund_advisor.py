@@ -11,10 +11,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- Initialize state on first load ---
-if "best_scheme" not in st.session_state:
-    st.session_state["best_scheme"] = None
-
 # --- Homepage Banner ---
 st.title("Nippon Fund Advisor")
 st.markdown("""
@@ -54,6 +50,25 @@ nav_df = load_amfi_nav()
 nippon_df = nav_df[nav_df['Scheme Name'].str.contains("Nippon", case=False, na=False)]
 scheme_names = sorted(nippon_df['Scheme Name'].unique())
 
+# --- Fund Recommendation Logic ---
+def recommend_funds(df, horizon, risk, goal):
+    keyword_map = {
+        ("Long Term (5+ years)", "High", "Wealth Growth"): "Small Cap",
+        ("Medium Term (3-5 years)", "Medium", "Capital Preservation"): "Large Cap",
+        ("Short Term (1-2 years)", "Low", "Regular Income"): "Low Duration",
+        ("Medium Term (3-5 years)", "High", "Wealth Growth"): "Mid Cap",
+        ("Long Term (5+ years)", "Medium", "Capital Preservation"): "Balanced",
+        ("Short Term (1-2 years)", "Medium", "Wealth Growth"): "Savings",
+    }
+    keyword = keyword_map.get((horizon, risk, goal), "Large Cap")
+    filtered = df[df['Scheme Name'].str.contains(keyword, case=False, na=False)]
+    top_funds = filtered['Scheme Name'].unique().tolist()[:3]
+
+    if top_funds:
+        return top_funds, keyword
+    else:
+        return df['Scheme Name'].unique().tolist()[:3], None
+
 # --- Sidebar: Collect User Preferences ---
 with st.sidebar:
     st.header("Investor Profile")
@@ -63,34 +78,54 @@ with st.sidebar:
         goal_type = st.selectbox("Your investment goal?", ["Wealth Growth", "Regular Income", "Capital Preservation"])
         submitted = st.form_submit_button("Update Recommendation")
 
-# --- Fund Recommendation Logic ---
-def recommend_fund(df, horizon, risk, goal):
-    rating_map = {
-        ("Long Term (5+ years)", "High", "Wealth Growth"): "Nippon India Small Cap Fund - Growth",
-        ("Medium Term (3-5 years)", "Medium", "Capital Preservation"): "Nippon India Large Cap Fund - Growth",
-        ("Short Term (1-2 years)", "Low", "Regular Income"): "Nippon India Low Duration Fund - Growth",
-    }
-    for key, scheme in rating_map.items():
-        if key == (horizon, risk, goal) and scheme in df['Scheme Name'].values:
-            return scheme
-    return scheme_names[0]
+# --- Always recompute if submitted or profile changed ---
+current_profile = (investment_horizon, risk_tolerance, goal_type)
+last_profile = st.session_state.get("last_profile")
 
-if submitted:
-    st.session_state["best_scheme"] = recommend_fund(nippon_df, investment_horizon, risk_tolerance, goal_type)
+if submitted or current_profile != last_profile:
+    top_schemes, reason = recommend_funds(nippon_df, *current_profile)
+    st.session_state.best_schemes = top_schemes
+    st.session_state.recommend_reason = reason
+    st.session_state.last_profile = current_profile
 
-best_scheme = st.session_state["best_scheme"] or recommend_fund(nippon_df, investment_horizon, risk_tolerance, goal_type)
+best_schemes = st.session_state.get("best_schemes", [])
+recommend_reason = st.session_state.get("recommend_reason")
 
-# --- Display Recommended Scheme ---
+# --- Display Recommended Schemes ---
 st.header("Best Match for You")
-st.success(f"Based on your profile, we recommend: **{best_scheme}**")
+if best_schemes:
+    for idx, scheme in enumerate(best_schemes):
+        st.success(f"#{idx+1} Recommendation: **{scheme}**")
+    if recommend_reason:
+        st.markdown(f"_Why these funds?_ Matched to category: **{recommend_reason}**.")
+else:
+    st.warning("No recommendation yet. Please select a profile.")
 
-# --- Prepare Data for Selected Scheme ---
+# --- Compare NAV Stats of Top 3 Schemes ---
+if best_schemes:
+    st.subheader("🔍 Compare Recommended Funds")
+    nav_stats = []
+    for name in best_schemes:
+        df = nippon_df[nippon_df['Scheme Name'] == name]
+        df = df.sort_values("Date")
+        if not df.empty:
+            avg = round(df['Net Asset Value'].mean(), 2)
+            max_ = round(df['Net Asset Value'].max(), 2)
+            min_ = round(df['Net Asset Value'].min(), 2)
+            nav_stats.append({"Scheme": name, "Avg NAV": avg, "Max NAV": max_, "Min NAV": min_})
+
+    if nav_stats:
+        stat_df = pd.DataFrame(nav_stats)
+        st.dataframe(stat_df, use_container_width=True)
+
+# --- Prepare Data for Top Scheme ---
+best_scheme = best_schemes[0] if best_schemes else None
 scheme_data = nippon_df[nippon_df['Scheme Name'] == best_scheme].copy()
 scheme_data = scheme_data.sort_values('Date')
 
 # --- Key Stats ---
-if not scheme_data.empty:
-    st.subheader("FUND SUMMARY")
+if best_scheme and not scheme_data.empty:
+    st.subheader("NO.1 FUND SUMMARY")
     avg_nav = round(scheme_data['Net Asset Value'].mean(), 2)
     max_nav = round(scheme_data['Net Asset Value'].max(), 2)
     min_nav = round(scheme_data['Net Asset Value'].min(), 2)
@@ -101,9 +136,9 @@ if not scheme_data.empty:
     col3.metric("Lowest NAV", f"₹{min_nav}")
 
     st.subheader("ADVISOR INSIGHT")
-    st.info("This fund aligns with your risk profile. Consider SIPs for disciplined investing.")
+    st.info("These funds align with your risk profile. Consider SIPs for disciplined investing.")
 else:
-    st.warning("No NAV data available for this scheme.")
+    st.warning("No NAV data available for top scheme.")
 
 # --- Show All Nippon Fund Schemes with Search + Tags ---
 st.header("📚 Browse & Explore Funds")
@@ -125,4 +160,3 @@ if not selected_data.empty:
     st.markdown(f"<div style='font-size:16px;'>Latest NAV: ₹{selected_data['Net Asset Value'].iloc[-1]:.2f}</div>", unsafe_allow_html=True)
 else:
     st.warning("No data available for selected scheme.")
-
