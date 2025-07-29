@@ -11,6 +11,10 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- Initialize state on first load ---
+if "best_scheme" not in st.session_state:
+    st.session_state["best_scheme"] = None
+
 # --- Homepage Banner ---
 st.title("Nippon Fund Advisor")
 st.markdown("""
@@ -72,10 +76,9 @@ def recommend_fund(df, horizon, risk, goal):
     return scheme_names[0]
 
 if submitted:
-    best_scheme = recommend_fund(nippon_df, investment_horizon, risk_tolerance, goal_type)
-    st.session_state["best_scheme"] = best_scheme
+    st.session_state["best_scheme"] = recommend_fund(nippon_df, investment_horizon, risk_tolerance, goal_type)
 
-best_scheme = st.session_state.get("best_scheme", recommend_fund(nippon_df, investment_horizon, risk_tolerance, goal_type))
+best_scheme = st.session_state["best_scheme"] or recommend_fund(nippon_df, investment_horizon, risk_tolerance, goal_type)
 
 # --- Display Recommended Scheme ---
 st.header("Best Match for You")
