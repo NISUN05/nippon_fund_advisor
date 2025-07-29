@@ -126,7 +126,7 @@ scheme_data = scheme_data.sort_values('Date')
 
 # --- Key Stats ---
 if best_scheme and not scheme_data.empty:
-    st.subheader("FUND SUMMARY")
+    st.subheader("#1 FUND SUMMARY")
     avg_nav = round(scheme_data['Net Asset Value'].mean(), 2)
     max_nav = round(scheme_data['Net Asset Value'].max(), 2)
     min_nav = round(scheme_data['Net Asset Value'].min(), 2)
